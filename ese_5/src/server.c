@@ -1,109 +1,78 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "errExit.h"
-#include "request_response.h"
+#include "hints.h"
 
-char *path2ServerFIFO = "/tmp/fifo_server";
-char *baseClientFIFO = "/tmp/fifo_client.";
+// Requests served so far, for the handler
+volatile int served = 0;
 
-// the file descriptor entry for the FIFO
-int serverFIFO, serverFIFO_extra;
+// The handler of SIGINT: the server stops from here, because a blocked
+// open or read on the FIFO resumes after the handler returns. Print
+// "hint server: stopped after <served> request(s)", remove the request
+// FIFO with 'unlink' and terminate with 'exit'
+void sigHandler(int sig) {
 
-// the quit function closes the file descriptors for the FIFO,
-// removes the FIFO from the file system, and terminates the process
-void quit(int sig) {
-  // the quit function is used as signal handler for the ALARM signal too.
-  if (sig == SIGALRM) printf("<Server> Time expired!\n");
 
-  // Close the FIFO
-  if (serverFIFO != 0 && close(serverFIFO) == -1) errExit("close failed");
 
-  if (serverFIFO_extra != 0 && close(serverFIFO_extra) == -1)
-    errExit("close failed");
-
-  // Remove the FIFO
-  if (unlink(path2ServerFIFO) != 0) errExit("unlink failed");
-
-  // terminatethe process
-  _exit(0);
-}
-
-void sendResponse(struct Request *request) {
-  // make the path of client's FIFO
-  char path2ClientFIFO[25];
-  sprintf(path2ClientFIFO, "%s%d", baseClientFIFO, request->cPid);
-
-  printf("<Server> opening FIFO %s...\n", path2ClientFIFO);
-  // Open the client's FIFO in write-only mode
-  //...
-
-  // Prepare the response for the client
-  struct Response response;
-  response.result = request->code * request->code;
-
-  printf("<Server> sending a response\n");
-  // Write the Response into the opened FIFO
-  //...
-
-  // Close the FIFO
-  //...
 }
 
 int main(int argc, char *argv[]) {
-  printf("<Server> Making FIFO...\n");
-  // make a FIFO with the following permissions:
-  // user:  read, write
-  // group: write
-  // other: no permission
-  //...
+    // Install sigHandler for SIGINT using 'signal' (errExit on SIG_ERR)
 
-  printf("<Server> FIFO %s created!\n", path2ServerFIFO);
 
-  // set a signal handler for SIGALRM and SIGINT signals
-  if (signal(SIGALRM, quit) == SIG_ERR || signal(SIGINT, quit) == SIG_ERR) {
-    errExit("change signal handlers failed");
-  }
+    // Create the request FIFO using 'mkfifo' with the name HINTS_FIFO and
+    // the permissions S_IRUSR | S_IWUSR (use 'errExit' if it fails)
 
-  // setting a 30 seconds alarm
-  //...
 
-  // Wait for client in read-only mode. The open blocks the calling process
-  // until another process opens the same FIFO in write-only mode
-  printf("<Server> waiting for a client...\n");
-  //...
+    printf("hint server %d: waiting for requests on %s, Ctrl+C to stop\n", getpid(), HINTS_FIFO);
+    fflush(stdout);
 
-  // Open an extra descriptor, so that the server does not see end-of-file
-  // even if all clients closed the write end of the FIFO
-  //...
+    while (1) {
+        // Open the request FIFO for reading ('open', O_RDONLY): it blocks
+        // until a client opens it for writing (use 'errExit' if it fails)
+        int fd = -1;
 
-  struct Request request;
-  int bR = -1;
-  do {
-    printf("<Server> waiting for a Request...\n");
-    // Read a request from the FIFO
-    //...
 
-    // remove the alarm
-    alarm(0);
 
-    // Check the number of bytes read from the FIFO
-    if (bR == -1) {
-      printf("<Server> it looks like the FIFO is broken\n");
-    } else if (bR != sizeof(struct Request) || bR == 0)
-      printf("<Server> it looks like I did not receive a valid request\n");
-    else
-      sendResponse(&request);
+        // Read one struct Request using 'read' (errExit on -1), then close
+        // the FIFO. Less than sizeof(req) bytes: the client closed without
+        // a full request, go on with the next one
+        struct Request req;
+        ssize_t n = -1;
 
-    // reset the alarm
-    alarm(30);
-  } while (bR != -1);
 
-  // the FIFO is broken, run quit() to remove the FIFO and
-  // terminate the process.
-  quit(0);
+
+
+
+
+
+        // Compute the hint with hintFor (given)
+        struct Response resp;
+        hintFor(req.position, &resp);
+        printf("request from client %d: position %d -> %s (%+d)\n", (int)req.cPid, req.position, resp.bestmove, resp.score);
+        fflush(stdout);
+
+        // The reply FIFO of the client: its name from REPLY_FIFO_FORMAT and
+        // req.cPid with 'snprintf'. Open it for writing ('open', O_WRONLY),
+        // write the response in one 'write' (sizeof(resp) bytes) and close
+        // it (use 'errExit' if a call fails)
+        char replyName[64];
+
+        int reply = -1;
+
+
+
+
+
+        served++;
+    }
+
+    return 0;
 }

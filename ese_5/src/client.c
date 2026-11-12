@@ -3,61 +3,59 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "errExit.h"
-#include "request_response.h"
-
-char *path2ServerFIFO = "/tmp/fifo_server";
-char *baseClientFIFO = "/tmp/fifo_client.";
-
-#define MAX 100
+#include "hints.h"
+#include "report.h"
 
 int main(int argc, char *argv[]) {
-  // Step-1: The client makes a FIFO in /tmp
-  char path2ClientFIFO[25];
-  // create a unique FIFO name and store it in path2ClientFIFO
-  //...
-  printf("<Client> making FIFO...\n");
-  // make a FIFO with the following permissions:
-  // user:  read, write
-  // group: write
-  // other: no permission
-  //...
+    // Check command line input arguments using 'argc'
+    if (argc != 2) {
+        printf("Usage: %s <position>\n", argv[0]);
+        return 1;
+    }
 
-  printf("<Client> FIFO %s created!\n", path2ClientFIFO);
+    // The reply FIFO of this client: its name from REPLY_FIFO_FORMAT and the
+    // PID with 'snprintf'; create it using 'mkfifo' with the permissions
+    // S_IRUSR | S_IWUSR (use 'errExit' if it fails)
+    char replyName[64];
 
-  // Step-2: The client opens the server's FIFO to send a Request
-  printf("<Client> opening FIFO %s...\n", path2ServerFIFO);
-  //...
 
-  /* Intializes the random number generator */
-  time_t t;
-  srand((unsigned int)time(&t));
 
-  // Prepare a request
-  struct Request request;
-  request.cPid = getpid();
-  request.code = (int)(((double)rand() / RAND_MAX) * 10);
+    // Fill the request: the PID of this process and the position from
+    // argv[1] with 'atoi'
+    struct Request req;
 
-  // Step-3: The client sends a Request through the server's FIFO
-  printf("<Client> sending %d\n", request.code);
-  //...
 
-  // Step-4: The client opens its FIFO to get a Response
-  //...
 
-  // Step-5: The client reads a Response from the server
-  struct Response response;
-  //...
+    // Open the request FIFO for writing ('open', O_WRONLY; it fails with
+    // "No such file or directory" if the server is not running), write the
+    // request in one 'write' (sizeof(req) bytes) and close it
+    // (use 'errExit' if a call fails)
+    int fd = -1;
 
-  // Step-6: The client prints the result on terminal
-  printf("<Client> The server sent the result: %d\n", response.result);
 
-  // Step-7: The client closes its FIFO
-  //...
 
-  // Step-8: The client removes its FIFO from the file system
-  //...
+
+    printf("client %d: hint requested for position %d\n", getpid(), req.position);
+
+    // Open the reply FIFO for reading ('open', O_RDONLY: it blocks until the
+    // server opens it for writing), read one struct Response with 'read'
+    // (sizeof(resp) bytes, errExit on a short read) and close it
+    struct Response resp;
+    int reply = -1;
+
+
+
+
+    printf("client %d: hint %s, score %+d\n", getpid(), resp.bestmove, resp.score);
+
+    // Tournament report (given): reveals code #5 when the hint is right
+    report_check(&req, &resp, replyName);
+
+    // Remove the reply FIFO using 'unlink' (use 'errExit' if it fails)
+
+
+    return 0;
 }
